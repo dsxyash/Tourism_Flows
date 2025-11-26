@@ -1,0 +1,487 @@
+---
+title: "Tourism_Flows"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-10-23"
+---
+
+```{r}
+#Installing necessary libraries
+library(forecast)
+library(tsutils)
+```
+
+```{r}
+#Loading the data
+load("C:\\Users\\WhyWh\\Downloads\\PA_project\\dataTour.Rdata", verbose = TRUE)
+
+load("C:\\Users\\WhyWh\\Downloads\\PA_project\\IMFdata.Rdata", verbose = TRUE)
+```
+
+```{r}
+print(names(dataTour))
+```
+
+```{r}
+print(names(X))
+```
+
+```{r}
+#Extracting the destination country
+canada_ts <- dataTour$Canada
+```
+
+```{r}
+mx_to_ca <- canada_ts[, 'Mexico']
+```
+
+```{r}
+print(mx_to_ca)
+```
+
+```{r}
+mx_to_ca <- window(mx_to_ca, start = c(1995, 1), end = c(2019, 4))
+print(mx_to_ca)
+```
+
+```{r}
+gdp_mx <- X$Mexico
+colnames(gdp_mx)
+```
+
+```{r}
+gdp_ca <- X$Canada
+colnames(gdp_ca)
+```
+
+```{r}
+cat('Start year for GDP in Mexico:', start(gdp_mx), '\n')
+cat('End year for GDP in canada:', end(gdp_mx), '\n')
+cat('Start year for GDP in Mexico:', start(gdp_ca), '\n')
+cat('End year for GDP in Canada:', end(gdp_ca), '\n')
+```
+
+```{r}
+gdp_mx <- ts(rep(X$Mexico[, 1], each = 4), 
+             start = c(1980, 1), frequency = 4)
+
+gdp_ca <- ts(rep(X$Canada[, 1], each = 4),
+             start = c(1980, 1), frequency = 4)
+```
+
+```{r}
+gdp_mx <- window(gdp_mx, start = c(1995, 1), end = c(2019, 4))
+gdp_ca <- window(gdp_ca, start = c(1995, 1), end = c(2019, 4))
+```
+
+```{r}
+print(gdp_mx)
+```
+
+```{r}
+print(gdp_ca)
+```
+
+```{r}
+#Checking whether there are any missing values
+anyNA(mx_to_ca)
+```
+
+```{r}
+cat('Missing values in GDP data for Mexico:', anyNA(gdp_mx), '\n')
+cat('Missing values in GDP data for Canada:', anyNA(gdp_ca))
+```
+
+```{r}
+#Controlling so the values are correct where the start date should
+#be 1995 and the end date 2019
+cat('Tourism flows from Mexico to canada:\n')
+cat('Start:', start(mx_to_ca), '\n')
+cat('End:', end(mx_to_ca), '\n')
+cat('Length:', length(mx_to_ca), '\n\n')
+
+cat('GDP Mexico:\n')
+cat('Start:', start(gdp_mx), '\n')
+cat('End:', end(gdp_mx), '\n')
+cat('Length:', length(gdp_mx), '\n\n')
+
+cat('GDP Canada:\n')
+cat('Start:', start(gdp_ca), '\n')
+cat('End:', end(gdp_ca), '\n')
+cat('Length:', length(gdp_ca), '\n')
+```
+
+**Exploring the time series**
+
+```{r}
+plot(mx_to_ca, 
+     main = 'Mexico to Canada',
+     ylab = 'Amount of tourists',
+     xlab = 'Year')
+```
+
+**Train/test splitting the tourism data**
+
+```{r}
+mx_to_ca.trn <- window(mx_to_ca, end = c(2017, 4))
+
+mx_to_ca.val <- window(mx_to_ca,
+                     start = c(2018, 1),
+                     end = c(2018, 4))
+
+mx_to_ca.tst <- window(mx_to_ca,
+                            start = c(2019, 1),
+                            end = c(2019, 4))
+```
+
+```{r}
+gdp_mx.trn <- window(gdp_mx, end = c(2017, 4))
+gdp_ca.trn <- window(gdp_ca, end = c(2017, 4))
+
+gdp_mx.val <- window(gdp_mx, start = c(2018, 1), end = c(2018, 4))
+gdp_ca.val <- window(gdp_ca, start = c(2018, 1), end = c(2018, 4))
+
+gdp_mx.tst <- window(gdp_mx, start = c(2019, 1), end = c(2019, 4))
+gdp_ca.tst <- window(gdp_ca, start = c(2019, 1), end = c(2019, 4))
+```
+
+**Exploring and visualizing the data**
+
+```{r}
+cma <- cmav(mx_to_ca.trn, outplot = 1)
+```
+
+```{r}
+seasplot(mx_to_ca.trn, outplot = 4)
+```
+
+```{r}
+decomp(mx_to_ca.trn, outplot = 1)
+```
+
+**TRAINING THE MODELS ON THE TIME SERIES**
+
+-   **SEASONAL NAIVE**
+
+```{r}
+fit_tourism_snaive <- snaive(mx_to_ca.trn)
+print(fit_tourism_snaive)
+```
+
+```{r}
+frcst_tourism_snaive <- forecast(fit_tourism_snaive, h = 4)
+plot(frcst_tourism_snaive)
+lines(mx_to_ca.tst, col = 'red')
+```
+
+-   **MODEL: ETS**
+
+```{r}
+fit_tourism_ets <- ets(mx_to_ca.trn)
+print(fit_tourism_ets)
+```
+
+```{r}
+#Forecasting
+frcst_tourism_ets <- forecast(fit_tourism_ets, h = 4)
+plot(frcst_tourism_ets)
+lines(mx_to_ca.tst, col = 'red')
+```
+
+-   **MODEL: ARIMA**
+
+```{r}
+fit_tourism_arima <- auto.arima(mx_to_ca.trn, seasonal = TRUE)
+print(fit_tourism_arima)
+```
+
+```{r}
+#Forecasting
+frcst_tourism_arima <- forecast(fit_tourism_arima, h = 4)
+plot(frcst_tourism_arima)
+lines(mx_to_ca.tst, col = 'red')
+```
+
+-   **MODEL: REGRESSION w/GDP data included**
+
+```{r}
+#Preparing the regression data and getting the amount of observations
+n <- length(mx_to_ca.trn)
+regression_data <- data.frame(y = mx_to_ca.trn)
+```
+
+```{r}
+#Creating the dataframe with one column that contains the tourism data
+for (i in 1:5) 
+{
+  regression_data[[paste0('lag', i)]] <- c(rep(NA, i), 
+                                    head(mx_to_ca.trn, -i))
+}
+```
+
+```{r}
+#Converting from time series to values that are numeric
+regression_data$mx_gdp <- as.numeric(gdp_mx.trn)
+regression_data$ca_gdp <- as.numeric(gdp_ca.trn)
+```
+
+```{r}
+#Counting total missing values
+sum(is.na(regression_data))
+```
+
+```{r}
+#Removing rows with the missing values from lagging
+regression_data <- na.omit(regression_data)
+```
+
+```{r}
+nrow(regression_data)
+```
+
+```{r}
+fit_tourism_reg <- step(lm(y ~ ., data = regression_data), 
+                        trace = 0)
+```
+
+```{r}
+print(summary(fit_tourism_reg))
+```
+
+```{r}
+frcst_tourism_reg <- numeric(4)
+```
+
+```{r}
+for (i in 1:4) 
+{
+  lags <- c(tail(mx_to_ca.trn, 5), 
+            frcst_tourism_reg)
+  
+  lags <- lags[i:(i+4)][5:1]
+  
+  newdata <- data.frame(
+    lag1 = lags[1], 
+    lag2 = lags[2], 
+    lag3 = lags[3],
+    lag4 = lags[4], 
+    lag5 = lags[5],
+    
+    mx_gdp = as.numeric(gdp_mx.tst[i]),
+    ca_gdp = as.numeric(gdp_ca.tst[i])
+  )
+  
+  frcst_tourism_reg[i] <- predict(fit_tourism_reg, newdata)
+}
+```
+
+```{r}
+print(round(frcst_tourism_reg))
+```
+
+```{r}
+plot(window(mx_to_ca, start = c(2014, 1)),
+     main = "Regression Forecast (Tourism Lags + GDP)",
+     ylab = "Tourist Arrivals", lwd = 2)
+lines(ts(frcst_tourism_reg, start = c(2019, 1), frequency = 4),
+      col = 'blue', lwd = 3)
+lines(mx_to_ca.tst, col = 'red', lwd = 2)
+legend('topleft', c('Actual', 'Forecast'), 
+       col = c('black', 'blue'), lwd = c(2, 3))
+```
+
+-   **COMPARING MODELS WITH SELECTED METRICS**
+
+```{r}
+mx_to_ca.val <- window(mx_to_ca, 
+                       start = c(2018, 1), end = c(2018, 4))
+
+gdp_mx.val <- window(gdp_mx, start = c(2018, 1), end = c(2018, 4))
+
+gdp_ca.val <- window(gdp_ca, start = c(2018, 1), end = c(2018, 4))
+```
+
+**Validation results**
+
+```{r}
+frc1_val <- fit_tourism_naive$mean
+
+frc2_val <- forecast(fit_tourism_ets, h = 4)$mean
+
+frc3_val <- forecast(fit_tourism_arima, h = 4)$mean
+
+frc4_val <- numeric(4)
+for (i in 1:4) {
+  lags <- c(tail(mx_to_ca.trn, 5), frc4_val)
+  lags <- lags[i:(i+4)][5:1]
+  
+  newdata <- data.frame(
+    lag1 = lags[1], lag2 = lags[2], lag3 = lags[3],
+    lag4 = lags[4], lag5 = lags[5],
+    mx_gdp = as.numeric(gdp_mx.val[i]),
+    ca_gdp = as.numeric(gdp_ca.val[i])
+  )
+  frc4_val[i] <- predict(fit_tourism_reg, newdata)
+}
+
+val_mae <- c(
+  Seasonal_Naive = mean(abs(as.numeric(mx_to_ca.val) - as.numeric(frc1_val))),
+  ETS = mean(abs(as.numeric(mx_to_ca.val) - as.numeric(frc2_val))),
+  ARIMA = mean(abs(as.numeric(mx_to_ca.val) - as.numeric(frc3_val))),
+  Regression = mean(abs(as.numeric(mx_to_ca.val) - frc4_val))
+)
+
+val_rmse <- c(
+  Seasonal_Naive = sqrt(mean((as.numeric(mx_to_ca.val) - as.numeric(frc1_val))^2)),
+  ETS = sqrt(mean((as.numeric(mx_to_ca.val) - as.numeric(frc2_val))^2)),
+  ARIMA = sqrt(mean((as.numeric(mx_to_ca.val) - as.numeric(frc3_val))^2)),
+  Regression = sqrt(mean((as.numeric(mx_to_ca.val) - frc4_val)^2))
+)
+
+val_mape <- c(
+  Seasonal_Naive = mean(abs((as.numeric(mx_to_ca.val) - as.numeric(frc1_val)) / as.numeric(mx_to_ca.val))) * 100,
+  ETS = mean(abs((as.numeric(mx_to_ca.val) - as.numeric(frc2_val)) / as.numeric(mx_to_ca.val))) * 100,
+  ARIMA = mean(abs((as.numeric(mx_to_ca.val) - as.numeric(frc3_val)) / as.numeric(mx_to_ca.val))) * 100,
+  Regression = mean(abs((as.numeric(mx_to_ca.val) - frc4_val) / as.numeric(mx_to_ca.val))) * 100
+)
+
+validation_results <- data.frame(
+  Model = names(val_mae),
+  MAE = round(val_mae),
+  RMSE = round(val_rmse),
+  MAPE = round(val_mape, 2)
+)
+
+validation_results <- validation_results[order(validation_results$MAE), ]
+print(validation_results)
+```
+
+**Test results**
+
+```{r}
+eval_mae
+eval_rmse
+eval_mape
+
+# MAE
+test_mae <- c(
+  Seasonal_Naive = mean(abs(as.numeric(mx_to_ca.tst) - as.numeric(frcst_tourism_snaive$mean))),
+  
+  ETS = mean(abs(as.numeric(mx_to_ca.tst) - as.numeric(frcst_tourism_ets$mean))),
+  
+  ARIMA = mean(abs(as.numeric(mx_to_ca.tst) - as.numeric(frcst_tourism_arima$mean))),
+  
+  Regression = mean(abs(as.numeric(mx_to_ca.tst) - frcst_tourism_reg))
+)
+
+# RMSE
+test_rmse <- c(
+  Seasonal_Naive = sqrt(mean((as.numeric(mx_to_ca.tst) - as.numeric(frcst_tourism_snaive$mean))^2)),
+  ETS = sqrt(mean((as.numeric(mx_to_ca.tst) - as.numeric(frcst_tourism_ets$mean))^2)),
+  ARIMA = sqrt(mean((as.numeric(mx_to_ca.tst) - as.numeric(frcst_tourism_arima$mean))^2)),
+  Regression = sqrt(mean((as.numeric(mx_to_ca.tst) - frcst_tourism_reg)^2))
+)
+
+# MAPE
+test_mape <- c(
+  Seasonal_Naive = mean(abs((as.numeric(mx_to_ca.tst) - as.numeric(frcst_tourism_snaive$mean)) / as.numeric(mx_to_ca.tst))) * 100,
+  ETS = mean(abs((as.numeric(mx_to_ca.tst) - as.numeric(frcst_tourism_ets$mean)) / as.numeric(mx_to_ca.tst))) * 100,
+  ARIMA = mean(abs((as.numeric(mx_to_ca.tst) - as.numeric(frcst_tourism_arima$mean)) / as.numeric(mx_to_ca.tst))) * 100,
+  Regression = mean(abs((as.numeric(mx_to_ca.tst) - frcst_tourism_reg) / as.numeric(mx_to_ca.tst))) * 100
+)
+
+# Create test results table
+test_results <- data.frame(
+  Model = names(test_mae),
+  MAE = round(test_mae),
+  RMSE = round(test_rmse),
+  MAPE = round(test_mape, 2)
+)
+
+# Sort by MAE
+test_results <- test_results[order(test_results$MAE), ]
+
+print(test_results)
+
+best_test_model <- as.character(test_results$Model[1])
+```
+
+**Visualizing the validation set**
+
+```{r}
+plot(window(mx_to_ca, start = c(2014, 1), end = c(2018, 4)),
+     main = 'Evaluation of validation set (2018)',
+     ylab = 'Tourist Arrivals',
+     xlab = 'Year',
+     lwd = 2,
+     xlim = c(2014, 2019),
+     ylim = c(40000, 160000))
+
+lines(ts(frc1_val, start = c(2018, 1), frequency = 4),
+      col = 'purple', lwd = 2, lty = 1)
+
+lines(ts(frc2_val, start = c(2018, 1), frequency = 4),
+      col = 'blue', lwd = 2, lty = 1)
+
+lines(ts(frc3_val, start = c(2018, 1), frequency = 4),
+      col = 'green', lwd = 2, lty = 1)
+
+lines(ts(frc4_val, start = c(2018, 1), frequency = 4),
+      col = 'orange', lwd = 2, lty = 1)
+
+lines(mx_to_ca.val, col = 'red', lwd = 3, lty = 1)
+
+abline(v = 2018, lty = 2, col = 'black', lwd = 1.5)
+
+legend('topleft',
+       legend = c('Seasonal Naive', 'ETS', 'ARIMA', 
+                  'Regression', 'Actual (2018)'),
+       
+       col = c('purple', 'blue', 
+               'green', 'orange', 'red'),
+       lty = 1,
+       lwd = c(2, 2, 2, 2, 2, 3, 1.5),
+       cex = 0.8) 
+```
+
+**Visualizing the test set**
+
+```{r}
+plot(window(mx_to_ca, start = c(2014, 1)),
+     main = 'Evaluation of test set (2019)',
+     ylab = 'Tourist Arrivals',
+     xlab = 'Year',
+     lwd = 2,
+     xlim = c(2014, 2020),
+     ylim = c(40000, 170000))
+
+lines(ts(frcst_tourism_snaive$mean, start = c(2019, 1), frequency = 4),
+      col = 'purple', lwd = 2, lty = 1)
+
+lines(ts(frcst_tourism_ets$mean, start = c(2019, 1), frequency = 4),
+      col = 'blue', lwd = 2, lty = 1)
+
+lines(ts(frcst_tourism_arima$mean, start = c(2019, 1), frequency = 4),
+      col = 'green', lwd = 2, lty = 1)
+
+lines(ts(frcst_tourism_reg, start = c(2019, 1), frequency = 4),
+      col = 'orange', lwd = 2, lty = 1)
+
+lines(mx_to_ca.tst, col = 'red', lwd = 3, lty = 1)
+
+abline(v = 2019, lty = 2, col = 'black', lwd = 1.5)
+
+legend('topleft',
+       legend = c('Seasonal Naive', 'ETS', 'ARIMA', 
+                  'Regression', 'Actual (2019)'),
+       
+       col = c('purple', 'blue', 'green', 'orange', 'red'),
+       lty = 1,
+       lwd = c(2, 2, 2, 2, 2, 3, 1),
+       cex = 0.8)
+```
+
+```{r}
+
+```
